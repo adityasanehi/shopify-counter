@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopify Order Counter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: white;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        .counter-container {
+            background: white;
+            border-radius: 20px;
+            padding: 60px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            position: relative;
+            width: 95%;
+            max-width: 1200px;
+            min-height: 60vh;
+        }
+
+        .top-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .period-filter {
+            position: relative;
+        }
+
+        .period-dropdown {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            font-size: 14px;
+            color: #374151;
+            cursor: pointer;
+            min-width: 120px;
+        }
+
+        .period-dropdown:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .live-indicator {
+            position: relative;
+            display: inline-block;
+        }
+
+        .live-status {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 60px;
+            justify-content: center;
+        }
+
+        .live-tooltip {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: #1f2937;
+            color: white;
+            font-size: 12px;
+            border-radius: 6px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .live-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            right: 12px;
+            border: 4px solid transparent;
+            border-top-color: #1f2937;
+        }
+
+        .live-indicator:hover .live-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .shopify-logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 30px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .shopify-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 16px;
+        }
+
+        .counter-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin: 40px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .digit {
+            background: #000;
+            color: #fff;
+            width: 120px;
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 72px;
+            font-weight: bold;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .digit::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .digit.animate {
+            animation: flip 0.6s ease-in-out;
+        }
+
+        @keyframes flip {
+            0% {
+                transform: scaleY(1);
+            }
+
+            50% {
+                transform: scaleY(0.1);
+            }
+
+            100% {
+                transform: scaleY(1);
+            }
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .live-status.online {
+            background: rgba(34, 197, 94, 0.1);
+            color: #15803d;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .live-status.offline {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .live-status.loading {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2563eb;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .live-status.online .status-dot {
+            background: #15803d;
+        }
+
+        .live-status.offline .status-dot {
+            background: #dc2626;
+        }
+
+        .live-status.loading .status-dot {
+            background: #2563eb;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status.online .status-dot {
+            background: #15803d;
+        }
+
+        .status.offline .status-dot {
+            background: #dc2626;
+        }
+
+        .status.loading .status-dot {
+            background: #2563eb;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .last-updated {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #6b7280;
+            display: none;
+            /* Hidden by default, shown in tooltip */
+        }
+
+        .title {
+            margin-bottom: 15px;
+            color: #374151;
+            font-size: 36px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: none;
+            /* Hidden as requested */
+        }
+
+        @media (max-width: 768px) {
+            .counter-container {
+                padding: 60px 20px 30px;
+            }
+
+            .shopify-logo {
+                width: 80px;
+                height: 80px;
+                margin: 0 auto 20px;
+                border-radius: 14px;
+            }
+
+            .shopify-logo img {
+                border-radius: 14px;
+            }
+
+            .digit {
+                width: 80px;
+                height: 100px;
+                font-size: 48px;
+                border-radius: 8px;
+            }
+
+            .counter-display {
+                gap: 6px;
+                margin: 30px 0;
+            }
+
+            .title {
+                font-size: 28px;
+            }
+
+            .top-controls {
+                position: static;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .period-dropdown {
+                min-width: 100px;
+                font-size: 12px;
+            }
+
+            .live-status {
+                font-size: 11px;
+                padding: 4px 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="counter-container">
+        <div class="top-controls">
+            <div class="period-filter">
+                <select class="period-dropdown" id="period-filter">
+                    <option value="all-time">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="this-week">This Week</option>
+                    <option value="last-week">Last Week</option>
+                    <option value="this-month">This Month</option>
+                    <option value="last-month">Last Month</option>
+                    <option value="this-year">This Year</option>
+                    <option value="last-year">Last Year</option>
+                </select>
+            </div>
+
+            <div class="live-indicator">
+                <div class="live-status loading" id="status">
+                    <div class="status-dot"></div>
+                    <span id="status-text">Connecting</span>
+                </div>
+                <div class="live-tooltip" id="tooltip">
+                    <span id="tooltip-text">Never updated</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="shopify-logo">
+            <img src="/static/assets/shopify-logo.svg" alt="Shopify"
+                onerror="this.style.display='none'; this.parentNode.innerHTML='🛍️'; this.parentNode.style.background='#95bf47'; this.parentNode.style.color='white'; this.parentNode.style.fontSize='24px';">
+        </div>
+        <h1 class="title">Total Orders</h1>
+
+        <div class="counter-display" id="counter">
+            <div class="digit" data-digit="0">0</div>
+            <div class="digit" data-digit="0">0</div>
+            <div class="digit" data-digit="0">0</div>
+            <div class="digit" data-digit="0">0</div>
+            <div class="digit" data-digit="0">0</div>
+        </div>
+
+        <div class="status loading" id="old-status" style="display: none;">
+            <div class="status-dot"></div>
+            <span id="old-status-text">Connecting...</span>
+        </div>
+
+        <div class="last-updated" id="last-updated">
+            Never updated
+        </div>
+
+        <!-- Retry button (hidden by default) -->
+        <button id="retry-button"
+            style="display: none; margin-top: 10px; padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+            Retry Connection
+        </button>
+
+        <!-- Test buttons for debugging -->
+        <!-- <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
+            <button id="test-sound"
+                style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                Test Sound
+            </button>
+            <button id="force-update"
+                style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                Force Update + Sound
+            </button>
+        </div> -->
+    </div>
+
+    <!-- Audio element for order update sound -->
+    <audio id="order-sound" preload="auto">
+        <source src="/static/assets/sound.m4a" type="audio/mp4">
+        <source src="/static/assets/sound.m4a" type="audio/mpeg">
+    </audio>
+
+    <script>
+        class OrderCounter {
+            constructor() {
+                this.currentCount = 0;
+                this.isOnline = false;
+                this.updateInterval = null;
+                this.retryCount = 0;
+                this.maxRetries = 3;
+                this.retryDelay = 2000; // 2 seconds
+                this.init();
+            }
+
+            init() {
+                this.updateCounter();
+                this.startPolling();
+            }
+
+            async updateCounter(isRetry = false) {
+                // Don't update if tab is hidden to avoid unnecessary requests
+                if (document.hidden) {
+                    console.log('Skipping update - tab is hidden');
+                    return;
+                }
+
+                try {
+                    if (!isRetry) {
+                        this.setStatus('loading', 'Fetching data...');
+                    } else {
+                        this.setStatus('loading', `Retrying... (${this.retryCount}/${this.maxRetries})`);
+                    }
+
+                    // Get the selected period
+                    const period = document.getElementById('period-filter').value;
+                    
+                    // Add timeout to prevent hanging requests
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+                    const response = await fetch(`/api/orders/count?period=${period}`, {
+                        signal: controller.signal
+                    });
+
+                    clearTimeout(timeoutId);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        console.log('Received new count:', data.count, 'Previous count:', this.currentCount);
+                        this.animateCounterUpdate(data.count);
+                        this.currentCount = data.count;
+                        this.setStatus('online', 'Live');
+                        this.updateLastUpdated(data.timestamp);
+                        this.isOnline = true;
+                        this.retryCount = 0; // Reset retry count on success
+                    } else {
+                        throw new Error(data.error || 'Failed to fetch data');
+                    }
+                } catch (error) {
+                    // Don't show error if request was aborted due to tab being hidden
+                    if (error.name === 'AbortError') {
+                        console.log('Request aborted (likely due to tab switch)');
+                        return;
+                    }
+
+                    console.error('Error fetching order count:', error);
+
+                    // Only handle retries if we're actually visible
+                    if (!document.hidden) {
+                        await this.handleConnectionError(error);
+                    }
+                }
+            }
+
+            async handleConnectionError(error) {
+                this.retryCount++;
+
+                if (this.retryCount <= this.maxRetries) {
+                    console.log(`Connection failed, retrying in ${this.retryDelay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
+                    this.setStatus('loading', `Retrying... (${this.retryCount}/${this.maxRetries})`);
+
+                    // Wait before retrying
+                    await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+
+                    // Retry the request
+                    await this.updateCounter(true);
+                } else {
+                    // All retries exhausted
+                    console.log('All retries exhausted, showing connection failed');
+                    this.setStatus('offline', 'Connection failed');
+                    this.isOnline = false;
+                    this.retryCount = 0; // Reset for next polling cycle
+                }
+            }
+
+            animateCounterUpdate(newCount) {
+                const digits = this.formatNumber(newCount);
+                const digitElements = document.querySelectorAll('.digit');
+                let hasChanged = false;
+                const previousCount = this.currentCount;
+
+                digits.forEach((digit, index) => {
+                    const element = digitElements[index];
+                    const currentDigit = element.getAttribute('data-digit');
+
+                    if (currentDigit !== digit) {
+                        hasChanged = true;
+                        element.classList.add('animate');
+                        setTimeout(() => {
+                            element.textContent = digit;
+                            element.setAttribute('data-digit', digit);
+                            element.classList.remove('animate');
+                        }, 300);
+                    }
+                });
+
+                // Play sound if counter has changed and it's not the initial load
+                console.log('Sound check - hasChanged:', hasChanged, 'previousCount:', previousCount, 'newCount:', newCount);
+                if (hasChanged && previousCount > 0) {
+                    console.log('Playing sound - count changed from', previousCount, 'to', newCount);
+                    this.playOrderSound();
+                } else if (hasChanged) {
+                    console.log('Counter changed but not playing sound (initial load):', previousCount, '->', newCount);
+                } else {
+                    console.log('No change detected, not playing sound');
+                }
+            }
+
+            formatNumber(num) {
+                const str = num.toString().padStart(5, '0');
+                return str.split('');
+            }
+
+            setStatus(type, text) {
+                const statusElement = document.getElementById('status');
+                const statusText = document.getElementById('status-text');
+                const retryButton = document.getElementById('retry-button');
+
+                statusElement.className = `live-status ${type}`;
+                statusText.textContent = text;
+
+                // Show retry button only when connection failed (not during retries)
+                if (type === 'offline' && text === 'Connection failed') {
+                    retryButton.style.display = 'inline-block';
+                } else {
+                    retryButton.style.display = 'none';
+                }
+            }
+
+            updateLastUpdated(timestamp) {
+                const date = new Date(timestamp);
+                const formatted = date.toLocaleString();
+                document.getElementById('tooltip-text').textContent = `Last updated: ${formatted}`;
+            }
+
+            playOrderSound() {
+                const audio = document.getElementById('order-sound');
+                console.log('Attempting to play sound, audio element:', audio);
+
+                if (audio) {
+                    // Reset audio to beginning and play
+                    audio.currentTime = 0;
+                    console.log('Audio file source:', audio.src || audio.currentSrc);
+
+                    audio.play().then(() => {
+                        console.log('Sound played successfully');
+                    }).catch(error => {
+                        console.log('Could not play sound:', error);
+                        // Sound might be blocked by browser autoplay policy
+                        // Try to enable audio on user interaction
+                        this.enableAudioOnInteraction();
+                    });
+                } else {
+                    console.log('Audio element not found');
+                }
+            }
+
+            enableAudioOnInteraction() {
+                // Enable audio on next user click/interaction
+                const enableAudio = () => {
+                    const audio = document.getElementById('order-sound');
+                    if (audio) {
+                        audio.play().then(() => {
+                            console.log('Audio enabled after user interaction');
+                        }).catch(e => console.log('Still cannot play audio:', e));
+                    }
+                    document.removeEventListener('click', enableAudio);
+                    document.removeEventListener('keydown', enableAudio);
+                };
+
+                document.addEventListener('click', enableAudio, { once: true });
+                document.addEventListener('keydown', enableAudio, { once: true });
+                console.log('Audio will be enabled on next user interaction');
+            }
+
+            startPolling() {
+                // Clear any existing interval first
+                this.stopPolling();
+
+                // Update immediately, then every 45 seconds
+                this.updateInterval = setInterval(() => {
+                    this.updateCounter();
+                }, 45000); // 45 seconds
+            }
+
+            stopPolling() {
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                }
+            }
+        }
+
+        // Initialize the counter when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.orderCounter = new OrderCounter();
+
+            // Handle period filter changes
+            document.getElementById('period-filter').addEventListener('change', (e) => {
+                const period = e.target.value;
+                console.log('Period changed to:', period);
+                // TODO: Implement period filtering in backend
+                window.orderCounter.updateCounter();
+            });
+
+            // Retry button
+            document.getElementById('retry-button').addEventListener('click', () => {
+                console.log('Retry button clicked');
+                window.orderCounter.retryCount = 0; // Reset retry count
+                window.orderCounter.updateCounter();
+            });
+
+            // Test sound button
+            document.getElementById('test-sound').addEventListener('click', () => {
+                console.log('Test sound button clicked');
+                window.orderCounter.playOrderSound();
+            });
+
+            // Force update button for debugging
+            document.getElementById('force-update').addEventListener('click', () => {
+                console.log('Force update button clicked');
+                // Simulate a counter change by incrementing current count
+                const newCount = window.orderCounter.currentCount + 1;
+                console.log('Forcing animation from', window.orderCounter.currentCount, 'to', newCount);
+                window.orderCounter.animateCounterUpdate(newCount);
+                window.orderCounter.currentCount = newCount;
+            });
+        });
+
+        // Handle page visibility changes to pause/resume polling
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Tab hidden - stopping polling');
+                window.orderCounter?.stopPolling();
+            } else {
+                console.log('Tab visible - resuming polling');
+                window.orderCounter?.startPolling();
+                // Wait a moment before updating to ensure tab is fully active
+                setTimeout(() => {
+                    window.orderCounter?.updateCounter();
+                }, 100);
+            }
+        });
+    </script>
+</body>
+
+</html>
