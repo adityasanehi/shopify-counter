@@ -167,6 +167,22 @@ curl http://localhost:5010/config/check
 }
 ```
 
+
+## 🏷️ Version Tags
+
+You can use specific versions for production stability:
+
+```bash
+# Use latest (updated with each push to main)
+docker pull ghcr.io/adityasanehi/shopify-counter:latest
+
+# Use specific version (recommended for production)
+docker pull ghcr.io/adityasanehi/shopify-counter:v1.0.0
+
+# Use major version (gets patch updates)
+docker pull ghcr.io/adityasanehi/shopify-counter:1
+
+
 ## 🤝 Contributing
 
 1. Fork the repository
