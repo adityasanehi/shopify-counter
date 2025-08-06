@@ -181,7 +181,7 @@ docker pull ghcr.io/adityasanehi/shopify-counter:v1.0.0
 
 # Use major version (gets patch updates)
 docker pull ghcr.io/adityasanehi/shopify-counter:1
-
+```
 
 ## 🤝 Contributing
 
