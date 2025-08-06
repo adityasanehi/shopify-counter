@@ -1,0 +1,13 @@
+# Core Flask application
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# HTTP requests
+requests==2.31.0
+
+# Production WSGI server
+gunicorn==21.2.0
+
+# Security and utilities (optional but recommended)
+Werkzeug==2.3.7  # Flask's WSGI utility library (usually auto-installed)
+urllib3>=1.26.0,<3.0.0  # For secure HTTPS requests

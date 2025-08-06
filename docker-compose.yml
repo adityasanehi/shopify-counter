@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  shopify-counter:
+    image: ghcr.io/adityasanehi/shopify-counter:latest
+    ports:
+      - "5089:5010"  # External:Internal port
+    environment:
+      - SHOPIFY_STORE_URL=${SHOPIFY_STORE_URL}
+      - SHOPIFY_ACCESS_TOKEN=${SHOPIFY_ACCESS_TOKEN}
+      - FLASK_ENV=production
+      - PORT=5010
+      # Optional CORS configuration for production
+      # - ALLOWED_ORIGINS=https://yourdomain.com
+    restart: unless-stopped
+    # Optional: Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Optional: Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
