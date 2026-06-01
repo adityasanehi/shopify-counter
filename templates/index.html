@@ -399,17 +399,34 @@
       card.dataset.timer = String(timer);
     }
 
+    /* ── Safe storage helpers (Fully Kiosk may disable DOM Storage) ───────── */
+    function safeGet(key) {
+      try { return localStorage.getItem(key); } catch (_) { return null; }
+    }
+    function safeSet(key, val) {
+      try { localStorage.setItem(key, val); } catch (_) { /* ignore */ }
+    }
+
     /* ── OrderCounter ──────────────────────────────────────────────────────── */
     class OrderCounter {
       constructor() {
         this.currentCount   = 0;
-        this.firstFetchDone = false;
-        // Count stored at last page load — sound only plays for counts above this,
-        // so kiosk reloads never trigger sound even if JS state is preserved.
-        this.loadCount      = parseInt(localStorage.getItem('oc_count') ?? '-1', 10);
+        // Sound is only allowed AFTER we have established a baseline from a
+        // successful first fetch in this page-load session. This flag is
+        // session-scoped (a reload always resets it) and does NOT depend on
+        // localStorage, so it works on Fully Kiosk Browser even when DOM
+        // Storage is disabled.
+        this.baselineCount  = null;        // count established at page load
+        this.soundArmed     = false;       // becomes true only after baseline + grace period
         this.pollTimer      = null;
         this.retryCount     = 0;
         this.maxRetries     = 3;
+        this.inFlight       = false;       // prevents concurrent fetches
+        this.loadedAt       = Date.now();
+        // Grace period: ignore any count increase observed in the first
+        // SOUND_GRACE_MS after page load. Covers reloads where the count
+        // genuinely went up while the kiosk was off/asleep.
+        this.SOUND_GRACE_MS = 5000;
         this._buildCounter(MIN_DIGITS);
         this.updateCounter();
         this.startPolling();
@@ -436,6 +453,13 @@
 
       async updateCounter(isRetry = false) {
         if (document.hidden) return;
+        // Single-flight: never let two fetches race. Without this, a
+        // visibilitychange fired during the initial constructor fetch can
+        // launch a second fetch that resolves AFTER the baseline is set,
+        // causing _animateUpdate to compare against the just-baselined value
+        // and play sound on reload.
+        if (this.inFlight && !isRetry) return;
+        this.inFlight = true;
 
         this.setStatus('loading', isRetry
           ? `Retrying… (${this.retryCount}/${this.maxRetries})`
@@ -454,7 +478,6 @@
 
           this._animateUpdate(data.count);
           this.currentCount   = data.count;
-          this.firstFetchDone = true;
           this.setStatus('online', 'Live');
           document.getElementById('tooltip').textContent =
             `Last updated: ${new Date(data.timestamp).toLocaleString()}`;
@@ -463,17 +486,20 @@
 
         } catch (err) {
           clearTimeout(tOut);
-          if (err.name === 'AbortError') return;
-          if (document.hidden) return;
+          if (err.name === 'AbortError') { this.inFlight = false; return; }
+          if (document.hidden)           { this.inFlight = false; return; }
 
           this.retryCount++;
           if (this.retryCount <= this.maxRetries) {
+            this.inFlight = false;
             await new Promise(r => setTimeout(r, 2000));
             return this.updateCounter(true);
           }
           this.setStatus('offline', 'Connection failed');
           document.getElementById('retry-button').style.display = 'inline-block';
           this.retryCount = 0;
+        } finally {
+          this.inFlight = false;
         }
       }
 
@@ -482,20 +508,36 @@
         this._ensureDigits(digits.length);
 
         const cards = [...document.getElementById('counter').children];
-        const prev  = this.currentCount;
-        let changed = false;
 
         cards.forEach((card, i) => {
           const d = digits[i] ?? '0';
-          if (card.dataset.val !== d) {
-            flipCard(card, d);
-            changed = true;
-          }
+          if (card.dataset.val !== d) flipCard(card, d);
         });
 
-        if (changed && this.firstFetchDone && newCount > this.loadCount) this._playSound();
-        this.loadCount = newCount;
-        localStorage.setItem('oc_count', String(newCount));
+        // Sound gating — ALL of these must be true:
+        //   1. We've established a baseline from a prior successful fetch
+        //      in THIS page-load session (baselineCount !== null).
+        //   2. The grace period after page load has elapsed (soundArmed).
+        //   3. The new count is strictly greater than the previously seen
+        //      count in this session.
+        // No localStorage involved — Fully Kiosk reloads always reset state.
+        if (this.baselineCount === null) {
+          // First successful fetch in this session — establish baseline,
+          // never play sound here.
+          this.baselineCount = newCount;
+          this.currentCount  = newCount;
+          // Arm the sound only after the grace period; this also protects
+          // against any late-arriving second fetch within the same load.
+          setTimeout(() => { this.soundArmed = true; }, this.SOUND_GRACE_MS);
+          safeSet('oc_count', String(newCount));
+          return;
+        }
+
+        if (this.soundArmed && newCount > this.currentCount) {
+          this._playSound();
+        }
+        this.currentCount = newCount;
+        safeSet('oc_count', String(newCount));
       }
 
       setStatus(type, text) {
@@ -540,11 +582,22 @@
       });
 
       document.addEventListener('visibilitychange', () => {
+        const oc = window.orderCounter;
+        if (!oc) return;
         if (document.hidden) {
-          window.orderCounter.stopPolling();
+          oc.stopPolling();
         } else {
-          window.orderCounter.startPolling();
-          setTimeout(() => window.orderCounter.updateCounter(), 100);
+          oc.startPolling();
+          // Do NOT force an immediate fetch if the baseline isn't set yet,
+          // or if we're still inside the grace period. Fully Kiosk Browser
+          // fires visibilitychange during/after reloads (screen wake,
+          // motion sensor, screensaver exit), and an early forced fetch
+          // races the constructor's initial fetch — the second one to
+          // resolve would see soundArmed flipping and play sound on reload.
+          const sinceLoad = Date.now() - oc.loadedAt;
+          if (oc.baselineCount !== null && sinceLoad > oc.SOUND_GRACE_MS) {
+            setTimeout(() => oc.updateCounter(), 100);
+          }
         }
       });
     });
