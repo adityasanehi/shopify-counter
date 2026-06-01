@@ -1,676 +1,545 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shopify Order Counter</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shopify Order Counter</title>
+  <style>
+    /* ── Sizing tokens — all dimensions derived from viewport width via clamp()
+       so the counter fills a 27" monitor naturally and still works on mobile. ── */
+    :root {
+      --dw:      clamp(58px,  10.5vw, 238px);   /* digit card width          */
+      --dh:      clamp(76px,  13.5vw, 306px);   /* digit card height         */
+      --fsz:     clamp(48px,   9vw,   204px);   /* digit font size           */
+      --gap:     clamp(3px,    0.55vw, 12px);   /* gap between digit cards   */
+      --rad:     clamp(6px,    0.7vw,  14px);   /* card corner radius        */
+      --persp:   700px;                          /* 3-D perspective distance  */
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: white;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            position: relative;
-        }
+      /* Flip timing — top flap folds in 220 ms, bottom unfolds 200 ms later */
+      --fold:    220ms;
+      --delay:   200ms;
+    }
 
-        .counter-container {
-            background: white;
-            border-radius: 20px;
-            padding: 60px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            position: relative;
-            width: 95%;
-            max-width: 1200px;
-            min-height: 60vh;
-        }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-        .top-controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
 
-        .period-filter {
-            position: relative;
-        }
+    /* ── Card container ──────────────────────────────────────────────────── */
+    .wrap {
+      background: #fff;
+      border-radius: clamp(14px, 1.8vw, 32px);
+      padding: clamp(48px, 6vw, 100px) clamp(24px, 4vw, 80px) clamp(32px, 4vw, 72px);
+      box-shadow: 0 28px 70px rgba(0,0,0,.09), 0 4px 12px rgba(0,0,0,.04);
+      border: 1px solid rgba(0,0,0,.06);
+      width: 95vw;
+      max-width: 2400px;
+      min-height: 52vh;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(14px, 2.2vw, 44px);
+    }
 
-        .period-dropdown {
-            padding: 8px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            background: white;
-            font-size: 14px;
-            color: #374151;
-            cursor: pointer;
-            min-width: 120px;
-        }
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    .topbar {
+      position: absolute;
+      top: clamp(10px, 1.4vw, 26px);
+      left: clamp(10px, 1.4vw, 26px);
+      right: clamp(10px, 1.4vw, 26px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
 
-        .period-dropdown:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
+    select#period-filter {
+      padding: clamp(5px, 0.45vw, 9px) clamp(8px, 0.9vw, 16px);
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      font-size: clamp(11px, 0.85vw, 14px);
+      color: #374151;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      padding-right: clamp(22px, 2vw, 32px);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right clamp(8px, 0.8vw, 12px) center;
+    }
+    select#period-filter:focus { border-color: #6b7280; }
 
-        .live-indicator {
-            position: relative;
-            display: inline-block;
-        }
+    /* Status pill */
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: clamp(4px, 0.4vw, 7px) clamp(8px, 0.8vw, 13px);
+      border-radius: 999px;
+      font-size: clamp(10px, 0.78vw, 13px);
+      font-weight: 500;
+      position: relative;
+    }
+    .pill.online  { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .pill.offline { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .pill.loading { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
 
-        .live-status {
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-width: 60px;
-            justify-content: center;
-        }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .online  .dot { background: #22c55e; animation: blink 2s infinite; }
+    .offline .dot { background: #ef4444; }
+    .loading .dot { background: #3b82f6; animation: blink 2s infinite; }
 
-        .live-tooltip {
-            position: absolute;
-            bottom: 100%;
-            right: 0;
-            margin-bottom: 8px;
-            padding: 8px 12px;
-            background: #1f2937;
-            color: white;
-            font-size: 12px;
-            border-radius: 6px;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.2s, visibility 0.2s;
-            pointer-events: none;
-            z-index: 1000;
-        }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
 
-        .live-tooltip::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            right: 12px;
-            border: 4px solid transparent;
-            border-top-color: #1f2937;
-        }
+    /* Tooltip on status pill hover */
+    .pill .tip {
+      position: absolute;
+      bottom: calc(100% + 7px);
+      right: 0;
+      background: #1f2937;
+      color: #fff;
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity .15s, visibility .15s;
+      pointer-events: none;
+    }
+    .pill .tip::after {
+      content: '';
+      position: absolute;
+      top: 100%; right: 11px;
+      border: 4px solid transparent;
+      border-top-color: #1f2937;
+    }
+    .pill:hover .tip { opacity: 1; visibility: visible; }
 
-        .live-indicator:hover .live-tooltip {
-            opacity: 1;
-            visibility: visible;
-        }
+    /* ── Branding ────────────────────────────────────────────────────────── */
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(8px, 0.9vw, 18px);
+    }
 
-        .shopify-logo {
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 30px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+    .logo {
+      width:  clamp(38px, 4.8vw, 88px);
+      height: clamp(38px, 4.8vw, 88px);
+      border-radius: clamp(8px, 1vw, 18px);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo img { width: 100%; height: 100%; object-fit: contain; }
 
-        .shopify-logo img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            border-radius: 16px;
-        }
+    h1 {
+      font-size: clamp(15px, 1.9vw, 36px);
+      font-weight: 600;
+      color: #111827;
+      letter-spacing: -0.02em;
+    }
 
-        .counter-display {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            margin: 40px 0;
-            font-family: 'Courier New', monospace;
-        }
+    /* ── Flip counter ────────────────────────────────────────────────────── */
+    #counter {
+      display: flex;
+      align-items: center;
+      gap: var(--gap);
+    }
 
-        .digit {
-            background: #000;
-            color: #fff;
-            width: 120px;
-            height: 140px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 72px;
-            font-weight: bold;
-            border-radius: 12px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
+    /*
+     * Each digit card has 4 panels:
+     *   .upper     — top half, always shows the CURRENT digit (static)
+     *   .lower     — bottom half, always shows the CURRENT digit (static)
+     *   .flap-top  — top half, shows OLD digit and folds away on change
+     *   .flap-bot  — bottom half, shows NEW digit and unfolds on change
+     *
+     * Text trick: each inner <span> is height:200% (= full card height)
+     * and centered. .upper/.flap-top anchor it top:0 so the overflow:hidden
+     * clips to the TOP half. .lower/.flap-bot anchor it bottom:0 so only
+     * the BOTTOM half is visible. Both halves show the same centered digit.
+     */
+    .dcard {
+      position: relative;
+      width:  var(--dw);
+      height: var(--dh);
+      perspective: var(--persp);
+      flex-shrink: 0;
+    }
 
-        .digit::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: rgba(255, 255, 255, 0.1);
-        }
+    .upper, .lower, .flap-top, .flap-bot {
+      position: absolute;
+      width: 100%;
+      height: 50%;
+      overflow: hidden;
+      background: #111;
+    }
 
-        .digit.animate {
-            animation: flip 0.6s ease-in-out;
-        }
+    .upper,    .flap-top { top: 0;    border-radius: var(--rad) var(--rad) 0 0; }
+    .lower,    .flap-bot { bottom: 0; border-radius: 0 0 var(--rad) var(--rad); }
 
-        @keyframes flip {
-            0% {
-                transform: scaleY(1);
-            }
+    /* Centre-line divider */
+    .upper::after, .flap-top::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: #000;
+      z-index: 5;
+    }
 
-            50% {
-                transform: scaleY(0.1);
-            }
+    /* Digit text */
+    .upper span, .lower span,
+    .flap-top span, .flap-bot span {
+      position: absolute;
+      width: 100%;
+      height: 200%;         /* full card height */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: var(--fsz);
+      font-weight: 700;
+      color: #fff;
+      line-height: 1;
+      user-select: none;
+    }
 
-            100% {
-                transform: scaleY(1);
-            }
-        }
+    /* Anchor top half text to top, bottom half text to bottom */
+    .upper span, .flap-top span { top:    0; }
+    .lower span, .flap-bot  span { bottom: 0; }
 
-        .status {
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
+    /* Subtle highlight on upper half — gives the classic split-flap depth */
+    .upper::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,.07) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
 
-        .live-status.online {
-            background: rgba(34, 197, 94, 0.1);
-            color: #15803d;
-            border: 1px solid rgba(34, 197, 94, 0.3);
-        }
+    /* ── Flap panels (3-D) ───────────────────────────────────────────────── */
+    .flap-top {
+      transform-origin: center bottom;
+      z-index: 3;
+      visibility: hidden;   /* hidden when not animating */
+    }
 
-        .live-status.offline {
-            background: rgba(239, 68, 68, 0.1);
-            color: #dc2626;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
+    .flap-bot {
+      transform-origin: center top;
+      z-index: 3;
+      transform: rotateX(90deg);   /* starts edge-on (invisible) */
+      backface-visibility: hidden;
+    }
 
-        .live-status.loading {
-            background: rgba(59, 130, 246, 0.1);
-            color: #2563eb;
-            border: 1px solid rgba(59, 130, 246, 0.3);
-        }
+    /* Active flip */
+    .flap-top.flip {
+      visibility: visible;
+      animation: fold-top var(--fold) ease-in forwards;
+    }
 
-        .live-status.online .status-dot {
-            background: #15803d;
-        }
+    .flap-bot.flip {
+      animation: fold-bot var(--fold) ease-out var(--delay) both;
+    }
 
-        .live-status.offline .status-dot {
-            background: #dc2626;
-        }
+    @keyframes fold-top {
+      from { transform: rotateX(  0deg); }
+      to   { transform: rotateX(-90deg); }
+    }
 
-        .live-status.loading .status-dot {
-            background: #2563eb;
-        }
+    @keyframes fold-bot {
+      from { transform: rotateX(90deg); }
+      to   { transform: rotateX( 0deg); }
+    }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
+    /* ── Retry button ────────────────────────────────────────────────────── */
+    #retry-button {
+      display: none;
+      padding: 8px 18px;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
 
-        .status.online .status-dot {
-            background: #15803d;
-        }
-
-        .status.offline .status-dot {
-            background: #dc2626;
-        }
-
-        .status.loading .status-dot {
-            background: #2563eb;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-        }
-
-        .last-updated {
-            margin-top: 15px;
-            font-size: 12px;
-            color: #6b7280;
-            display: none;
-            /* Hidden by default, shown in tooltip */
-        }
-
-        .title {
-            margin-bottom: 15px;
-            color: #374151;
-            font-size: 36px;
-            font-weight: 600;
-        }
-
-        .subtitle {
-            color: #6b7280;
-            font-size: 14px;
-            margin-bottom: 20px;
-            display: none;
-            /* Hidden as requested */
-        }
-
-        @media (max-width: 768px) {
-            .counter-container {
-                padding: 60px 20px 30px;
-            }
-
-            .shopify-logo {
-                width: 80px;
-                height: 80px;
-                margin: 0 auto 20px;
-                border-radius: 14px;
-            }
-
-            .shopify-logo img {
-                border-radius: 14px;
-            }
-
-            .digit {
-                width: 80px;
-                height: 100px;
-                font-size: 48px;
-                border-radius: 8px;
-            }
-
-            .counter-display {
-                gap: 6px;
-                margin: 30px 0;
-            }
-
-            .title {
-                font-size: 28px;
-            }
-
-            .top-controls {
-                position: static;
-                margin-bottom: 20px;
-                flex-wrap: wrap;
-                gap: 10px;
-            }
-
-            .period-dropdown {
-                min-width: 100px;
-                font-size: 12px;
-            }
-
-            .live-status {
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-        }
-    </style>
+    /* ── Mobile adjustments ──────────────────────────────────────────────── */
+    @media (max-width: 540px) {
+      .topbar { flex-wrap: wrap; }
+      .brand  { flex-direction: row; }
+    }
+  </style>
 </head>
-
 <body>
-    <div class="counter-container">
-        <div class="top-controls">
-            <div class="period-filter">
-                <select class="period-dropdown" id="period-filter">
-                    <option value="all-time">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="yesterday">Yesterday</option>
-                    <option value="this-week">This Week</option>
-                    <option value="last-week">Last Week</option>
-                    <option value="this-month">This Month</option>
-                    <option value="last-month">Last Month</option>
-                    <option value="this-year">This Year</option>
-                    <option value="last-year">Last Year</option>
-                </select>
-            </div>
+  <div class="wrap">
 
-            <div class="live-indicator">
-                <div class="live-status loading" id="status">
-                    <div class="status-dot"></div>
-                    <span id="status-text">Connecting</span>
-                </div>
-                <div class="live-tooltip" id="tooltip">
-                    <span id="tooltip-text">Never updated</span>
-                </div>
-            </div>
-        </div>
+    <div class="topbar">
+      <select id="period-filter">
+        <option value="all-time">All Time</option>
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="this-week">This Week</option>
+        <option value="last-week">Last Week</option>
+        <option value="this-month">This Month</option>
+        <option value="last-month">Last Month</option>
+        <option value="this-year">This Year</option>
+        <option value="last-year">Last Year</option>
+      </select>
 
-        <div class="shopify-logo">
-            <img src="/static/assets/shopify-logo.svg" alt="Shopify"
-                onerror="this.style.display='none'; this.parentNode.innerHTML='🛍️'; this.parentNode.style.background='#95bf47'; this.parentNode.style.color='white'; this.parentNode.style.fontSize='24px';">
-        </div>
-        <h1 class="title">Total Orders</h1>
-
-        <div class="counter-display" id="counter">
-            <div class="digit" data-digit="0">0</div>
-            <div class="digit" data-digit="0">0</div>
-            <div class="digit" data-digit="0">0</div>
-            <div class="digit" data-digit="0">0</div>
-            <div class="digit" data-digit="0">0</div>
-        </div>
-
-        <div class="status loading" id="old-status" style="display: none;">
-            <div class="status-dot"></div>
-            <span id="old-status-text">Connecting...</span>
-        </div>
-
-        <div class="last-updated" id="last-updated">
-            Never updated
-        </div>
-
-        <!-- Retry button (hidden by default) -->
-        <button id="retry-button"
-            style="display: none; margin-top: 10px; padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
-            Retry Connection
-        </button>
-
-        <!-- Test buttons for debugging -->
-        <!-- <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
-            <button id="test-sound"
-                style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                Test Sound
-            </button>
-            <button id="force-update"
-                style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                Force Update + Sound
-            </button>
-        </div> -->
+      <div class="pill loading" id="status">
+        <div class="dot"></div>
+        <span id="status-text">Connecting</span>
+        <div class="tip" id="tooltip">Never updated</div>
+      </div>
     </div>
 
-    <!-- Audio element for order update sound -->
-    <audio id="order-sound" preload="auto">
-        <source src="/static/assets/sound.m4a" type="audio/mp4">
-        <source src="/static/assets/sound.m4a" type="audio/mpeg">
-    </audio>
+    <div class="brand">
+      <div class="logo">
+        <img src="/static/assets/shopify-logo.svg" alt="Shopify"
+          onerror="this.style.display='none';this.parentNode.style.cssText='background:#95bf47;font-size:clamp(20px,3vw,50px);display:flex;align-items:center;justify-content:center;';this.parentNode.textContent='🛍️';">
+      </div>
+      <h1>Total Orders</h1>
+    </div>
 
-    <script>
-        class OrderCounter {
-            constructor() {
-                this.currentCount = 0;
-                this.isOnline = false;
-                this.updateInterval = null;
-                this.retryCount = 0;
-                this.maxRetries = 3;
-                this.retryDelay = 2000; // 2 seconds
-                this.init();
-            }
+    <div id="counter"></div>
 
-            init() {
-                this.updateCounter();
-                this.startPolling();
-            }
+    <button id="retry-button">Retry Connection</button>
 
-            async updateCounter(isRetry = false) {
-                // Don't update if tab is hidden to avoid unnecessary requests
-                if (document.hidden) {
-                    console.log('Skipping update - tab is hidden');
-                    return;
-                }
+  </div>
 
-                try {
-                    if (!isRetry) {
-                        this.setStatus('loading', 'Fetching data...');
-                    } else {
-                        this.setStatus('loading', `Retrying... (${this.retryCount}/${this.maxRetries})`);
-                    }
+  <audio id="order-sound" preload="auto">
+    <source src="/static/assets/sound.m4a" type="audio/mp4">
+  </audio>
 
-                    // Get the selected period
-                    const period = document.getElementById('period-filter').value;
-                    
-                    // Add timeout to prevent hanging requests
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+  <script>
+    /* ── Timing constants (must match CSS --fold / --delay) ── */
+    const FOLD_MS  = 220;
+    const DELAY_MS = 200;
+    const DONE_MS  = FOLD_MS + DELAY_MS + 60;   // when animation fully settles
+    const MIN_DIGITS = 6;                         // minimum displayed digits
+    const POLL_MS  = 45_000;
 
-                    const response = await fetch(`/api/orders/count?period=${period}`, {
-                        signal: controller.signal
-                    });
+    /* ── Build a digit card DOM node ──────────────────────────────────────── */
+    function makeCard(d = '0') {
+      const el = document.createElement('div');
+      el.className = 'dcard';
+      el.dataset.val = d;
+      el.dataset.busy = '0';
+      el.innerHTML = `
+        <div class="upper"><span>${d}</span></div>
+        <div class="lower"><span>${d}</span></div>
+        <div class="flap-top"><span>${d}</span></div>
+        <div class="flap-bot"><span>${d}</span></div>`;
+      return el;
+    }
 
-                    clearTimeout(timeoutId);
-                    const data = await response.json();
+    /* ── Flip a single card from its current value to newVal ─────────────── */
+    function flipCard(card, newVal) {
+      const oldVal = card.dataset.val;
+      if (oldVal === newVal) return;
 
-                    if (data.success) {
-                        console.log('Received new count:', data.count, 'Previous count:', this.currentCount);
-                        this.animateCounterUpdate(data.count);
-                        this.currentCount = data.count;
-                        this.setStatus('online', 'Live');
-                        this.updateLastUpdated(data.timestamp);
-                        this.isOnline = true;
-                        this.retryCount = 0; // Reset retry count on success
-                    } else {
-                        throw new Error(data.error || 'Failed to fetch data');
-                    }
-                } catch (error) {
-                    // Don't show error if request was aborted due to tab being hidden
-                    if (error.name === 'AbortError') {
-                        console.log('Request aborted (likely due to tab switch)');
-                        return;
-                    }
+      const ft = card.querySelector('.flap-top');
+      const fb = card.querySelector('.flap-bot');
 
-                    console.error('Error fetching order count:', error);
+      /* Cancel any in-flight animation cleanly */
+      if (card.dataset.busy === '1') {
+        clearTimeout(Number(card.dataset.timer));
+        ft.classList.remove('flip');
+        fb.classList.remove('flip');
+        card.querySelector('.lower span').textContent = oldVal;
+        card.dataset.busy = '0';
+      }
 
-                    // Only handle retries if we're actually visible
-                    if (!document.hidden) {
-                        await this.handleConnectionError(error);
-                    }
-                }
-            }
+      /* Set panel contents:
+         upper (static top)  → new digit shown immediately behind the folding flap
+         flap-top            → old digit that folds away
+         flap-bot            → new digit that unfolds from below
+         lower (static bot)  → still shows old digit until animation finishes  */
+      card.querySelector('.upper span').textContent = newVal;
+      card.querySelector('.lower span').textContent = oldVal;
+      ft.querySelector('span').textContent = oldVal;
+      fb.querySelector('span').textContent = newVal;
 
-            async handleConnectionError(error) {
-                this.retryCount++;
+      /* Force reflow so removing+adding .flip is treated as two separate frames */
+      ft.classList.remove('flip');
+      fb.classList.remove('flip');
+      void ft.offsetWidth;
 
-                if (this.retryCount <= this.maxRetries) {
-                    console.log(`Connection failed, retrying in ${this.retryDelay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
-                    this.setStatus('loading', `Retrying... (${this.retryCount}/${this.maxRetries})`);
+      ft.classList.add('flip');
+      fb.classList.add('flip');
+      card.dataset.val  = newVal;
+      card.dataset.busy = '1';
 
-                    // Wait before retrying
-                    await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+      const timer = setTimeout(() => {
+        card.querySelector('.lower span').textContent = newVal;
+        ft.classList.remove('flip');
+        fb.classList.remove('flip');
+        card.dataset.busy = '0';
+      }, DONE_MS);
+      card.dataset.timer = String(timer);
+    }
 
-                    // Retry the request
-                    await this.updateCounter(true);
-                } else {
-                    // All retries exhausted
-                    console.log('All retries exhausted, showing connection failed');
-                    this.setStatus('offline', 'Connection failed');
-                    this.isOnline = false;
-                    this.retryCount = 0; // Reset for next polling cycle
-                }
-            }
+    /* ── OrderCounter ──────────────────────────────────────────────────────── */
+    class OrderCounter {
+      constructor() {
+        this.currentCount = 0;
+        this.pollTimer    = null;
+        this.retryCount   = 0;
+        this.maxRetries   = 3;
+        this._buildCounter(MIN_DIGITS);
+        this.updateCounter();
+        this.startPolling();
+      }
 
-            animateCounterUpdate(newCount) {
-                const digits = this.formatNumber(newCount);
-                const digitElements = document.querySelectorAll('.digit');
-                let hasChanged = false;
-                const previousCount = this.currentCount;
+      /* Build (or rebuild) the counter with n digit cards */
+      _buildCounter(n) {
+        const el = document.getElementById('counter');
+        el.innerHTML = '';
+        for (let i = 0; i < n; i++) el.appendChild(makeCard('0'));
+      }
 
-                digits.forEach((digit, index) => {
-                    const element = digitElements[index];
-                    const currentDigit = element.getAttribute('data-digit');
+      /* Ensure at least n cards exist, prepending if needed */
+      _ensureDigits(n) {
+        const el = document.getElementById('counter');
+        while (el.children.length < n) el.prepend(makeCard('0'));
+      }
 
-                    if (currentDigit !== digit) {
-                        hasChanged = true;
-                        element.classList.add('animate');
-                        setTimeout(() => {
-                            element.textContent = digit;
-                            element.setAttribute('data-digit', digit);
-                            element.classList.remove('animate');
-                        }, 300);
-                    }
-                });
+      /* Zero-pad number to at least MIN_DIGITS characters */
+      _pad(num) {
+        const s = String(num);
+        return s.padStart(Math.max(MIN_DIGITS, s.length), '0');
+      }
 
-                // Play sound if counter has changed and it's not the initial load
-                console.log('Sound check - hasChanged:', hasChanged, 'previousCount:', previousCount, 'newCount:', newCount);
-                if (hasChanged && previousCount > 0) {
-                    console.log('Playing sound - count changed from', previousCount, 'to', newCount);
-                    this.playOrderSound();
-                } else if (hasChanged) {
-                    console.log('Counter changed but not playing sound (initial load):', previousCount, '->', newCount);
-                } else {
-                    console.log('No change detected, not playing sound');
-                }
-            }
+      async updateCounter(isRetry = false) {
+        if (document.hidden) return;
 
-            formatNumber(num) {
-                const str = num.toString().padStart(5, '0');
-                return str.split('');
-            }
+        this.setStatus('loading', isRetry
+          ? `Retrying… (${this.retryCount}/${this.maxRetries})`
+          : 'Fetching…');
 
-            setStatus(type, text) {
-                const statusElement = document.getElementById('status');
-                const statusText = document.getElementById('status-text');
-                const retryButton = document.getElementById('retry-button');
+        const period = document.getElementById('period-filter').value;
+        const ctrl   = new AbortController();
+        const tOut   = setTimeout(() => ctrl.abort(), 10_000);
 
-                statusElement.className = `live-status ${type}`;
-                statusText.textContent = text;
+        try {
+          const res  = await fetch(`/api/orders/count?period=${period}`, { signal: ctrl.signal });
+          clearTimeout(tOut);
+          const data = await res.json();
 
-                // Show retry button only when connection failed (not during retries)
-                if (type === 'offline' && text === 'Connection failed') {
-                    retryButton.style.display = 'inline-block';
-                } else {
-                    retryButton.style.display = 'none';
-                }
-            }
+          if (!data.success) throw new Error(data.error || 'Request failed');
 
-            updateLastUpdated(timestamp) {
-                const date = new Date(timestamp);
-                const formatted = date.toLocaleString();
-                document.getElementById('tooltip-text').textContent = `Last updated: ${formatted}`;
-            }
+          this._animateUpdate(data.count);
+          this.currentCount = data.count;
+          this.setStatus('online', 'Live');
+          document.getElementById('tooltip').textContent =
+            `Last updated: ${new Date(data.timestamp).toLocaleString()}`;
+          this.retryCount = 0;
+          document.getElementById('retry-button').style.display = 'none';
 
-            playOrderSound() {
-                const audio = document.getElementById('order-sound');
-                console.log('Attempting to play sound, audio element:', audio);
+        } catch (err) {
+          clearTimeout(tOut);
+          if (err.name === 'AbortError') return;
+          if (document.hidden) return;
 
-                if (audio) {
-                    // Reset audio to beginning and play
-                    audio.currentTime = 0;
-                    console.log('Audio file source:', audio.src || audio.currentSrc);
-
-                    audio.play().then(() => {
-                        console.log('Sound played successfully');
-                    }).catch(error => {
-                        console.log('Could not play sound:', error);
-                        // Sound might be blocked by browser autoplay policy
-                        // Try to enable audio on user interaction
-                        this.enableAudioOnInteraction();
-                    });
-                } else {
-                    console.log('Audio element not found');
-                }
-            }
-
-            enableAudioOnInteraction() {
-                // Enable audio on next user click/interaction
-                const enableAudio = () => {
-                    const audio = document.getElementById('order-sound');
-                    if (audio) {
-                        audio.play().then(() => {
-                            console.log('Audio enabled after user interaction');
-                        }).catch(e => console.log('Still cannot play audio:', e));
-                    }
-                    document.removeEventListener('click', enableAudio);
-                    document.removeEventListener('keydown', enableAudio);
-                };
-
-                document.addEventListener('click', enableAudio, { once: true });
-                document.addEventListener('keydown', enableAudio, { once: true });
-                console.log('Audio will be enabled on next user interaction');
-            }
-
-            startPolling() {
-                // Clear any existing interval first
-                this.stopPolling();
-
-                // Update immediately, then every 45 seconds
-                this.updateInterval = setInterval(() => {
-                    this.updateCounter();
-                }, 45000); // 45 seconds
-            }
-
-            stopPolling() {
-                if (this.updateInterval) {
-                    clearInterval(this.updateInterval);
-                }
-            }
+          this.retryCount++;
+          if (this.retryCount <= this.maxRetries) {
+            await new Promise(r => setTimeout(r, 2000));
+            return this.updateCounter(true);
+          }
+          this.setStatus('offline', 'Connection failed');
+          document.getElementById('retry-button').style.display = 'inline-block';
+          this.retryCount = 0;
         }
+      }
 
-        // Initialize the counter when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            window.orderCounter = new OrderCounter();
+      _animateUpdate(newCount) {
+        const digits = this._pad(newCount).split('');
+        this._ensureDigits(digits.length);
 
-            // Handle period filter changes
-            document.getElementById('period-filter').addEventListener('change', (e) => {
-                const period = e.target.value;
-                console.log('Period changed to:', period);
-                // TODO: Implement period filtering in backend
-                window.orderCounter.updateCounter();
-            });
+        const cards = [...document.getElementById('counter').children];
+        const prev  = this.currentCount;
+        let changed = false;
 
-            // Retry button
-            document.getElementById('retry-button').addEventListener('click', () => {
-                console.log('Retry button clicked');
-                window.orderCounter.retryCount = 0; // Reset retry count
-                window.orderCounter.updateCounter();
-            });
-
-            // Test sound button
-            document.getElementById('test-sound').addEventListener('click', () => {
-                console.log('Test sound button clicked');
-                window.orderCounter.playOrderSound();
-            });
-
-            // Force update button for debugging
-            document.getElementById('force-update').addEventListener('click', () => {
-                console.log('Force update button clicked');
-                // Simulate a counter change by incrementing current count
-                const newCount = window.orderCounter.currentCount + 1;
-                console.log('Forcing animation from', window.orderCounter.currentCount, 'to', newCount);
-                window.orderCounter.animateCounterUpdate(newCount);
-                window.orderCounter.currentCount = newCount;
-            });
+        cards.forEach((card, i) => {
+          const d = digits[i] ?? '0';
+          if (card.dataset.val !== d) {
+            flipCard(card, d);
+            changed = true;
+          }
         });
 
-        // Handle page visibility changes to pause/resume polling
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                console.log('Tab hidden - stopping polling');
-                window.orderCounter?.stopPolling();
-            } else {
-                console.log('Tab visible - resuming polling');
-                window.orderCounter?.startPolling();
-                // Wait a moment before updating to ensure tab is fully active
-                setTimeout(() => {
-                    window.orderCounter?.updateCounter();
-                }, 100);
-            }
+        if (changed && prev > 0) this._playSound();
+      }
+
+      setStatus(type, text) {
+        document.getElementById('status').className = `pill ${type}`;
+        document.getElementById('status-text').textContent = text;
+      }
+
+      _playSound() {
+        const audio = document.getElementById('order-sound');
+        if (!audio) return;
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+          /* Queue for next user interaction if autoplay is blocked */
+          document.addEventListener('click', () => {
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          }, { once: true });
         });
-    </script>
+      }
+
+      startPolling() {
+        this.stopPolling();
+        this.pollTimer = setInterval(() => this.updateCounter(), POLL_MS);
+      }
+
+      stopPolling() {
+        if (this.pollTimer) clearInterval(this.pollTimer);
+      }
+    }
+
+    /* ── Boot ───────────────────────────────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', () => {
+      window.orderCounter = new OrderCounter();
+
+      document.getElementById('period-filter').addEventListener('change', () => {
+        window.orderCounter.updateCounter();
+      });
+
+      document.getElementById('retry-button').addEventListener('click', () => {
+        window.orderCounter.retryCount = 0;
+        window.orderCounter.updateCounter();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          window.orderCounter.stopPolling();
+        } else {
+          window.orderCounter.startPolling();
+          setTimeout(() => window.orderCounter.updateCounter(), 100);
+        }
+      });
+    });
+  </script>
 </body>
-
 </html>
