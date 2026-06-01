@@ -77,6 +77,7 @@ spec:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `SHOPIFY_WEBHOOK_SECRET` | Webhook signing secret from Shopify Admin | *(unverified if not set)* |
 | `FLASK_ENV` | Environment mode | `development` |
 | `PORT` | Port to run the application | `5010` |
 | `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | All origins allowed |
@@ -98,12 +99,31 @@ spec:
 Your Shopify private app needs these permissions:
 - **Orders**: `read_orders`
 
+### 3. Register Webhooks (Recommended)
+
+Webhooks keep the all-time order count updated instantly without any API polling.
+
+1. Go to **Shopify Admin → Settings → Notifications → Webhooks**
+2. Create two webhooks pointing to your public app URL:
+
+| Topic | URL |
+|-------|-----|
+| `orders/create` | `https://your-domain/webhooks/orders` |
+| `orders/delete` | `https://your-domain/webhooks/orders` |
+
+3. Copy the **Signing secret** shown after creating the webhooks
+4. Set it as `SHOPIFY_WEBHOOK_SECRET` in your environment
+
+> **Note on `orders/cancelled`:** You do *not* need a webhook for cancellations.
+> Cancelled orders are still counted under `status=any`, so the total does not change.
+
 ## 📊 Features
 
-- 🔄 **Real-time updates** - Auto-refreshes every minute
+- ⚡ **Webhook-driven updates** - All-time count updated instantly on every new order; no Shopify API polling
+- 🔄 **6-hour reconciliation** - Background safety check corrects any drift between the cached count and the Shopify API
+- 🗄️ **Period caching** - Period-based counts (today, this week, etc.) are cached for 5 minutes and invalidated on each webhook event
 - 📱 **Responsive design** - Works on mobile and desktop
 - 🎯 **Period filtering** - Today, this week, this month, all-time, etc.
-- ⚡ **Fast and lightweight** - Minimal resource usage
 - 🛡️ **Error handling** - Graceful handling of API failures
 - 🔍 **Health checks** - Built-in health check endpoint
 
@@ -113,8 +133,20 @@ Your Shopify private app needs these permissions:
 |----------|-------------|
 | `GET /` | Main counter interface |
 | `GET /api/orders/count?period=all-time` | JSON API for order count |
+| `POST /webhooks/orders` | Shopify webhook receiver (orders/create, orders/delete) |
+| `GET /api/webhook/status` | Webhook state and reconciliation schedule |
 | `GET /health` | Health check endpoint |
 | `GET /config/check` | Configuration validation |
+
+### Count response — `source` field
+
+The `/api/orders/count` response includes a `source` field so you can tell where the number came from:
+
+| Value | Meaning |
+|-------|---------|
+| `webhook_cache` | Served from the in-memory counter maintained by webhooks |
+| `cache` | Served from a short-lived period cache (< 5 min old) |
+| `api` | Fetched live from the Shopify API (first load or cache miss) |
 
 ### Period Filters
 
