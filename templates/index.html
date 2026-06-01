@@ -24,30 +24,23 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f0f0f0;
-      min-height: 100vh;
+      background: #fff;
+      height: 100vh;
+      overflow: hidden;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
     }
 
-    /* ── Card container ──────────────────────────────────────────────────── */
+    /* ── Full-screen container ───────────────────────────────────────────── */
     .wrap {
+      flex: 1;
       background: #fff;
-      border-radius: clamp(14px, 1.8vw, 32px);
-      padding: clamp(48px, 6vw, 100px) clamp(24px, 4vw, 80px) clamp(32px, 4vw, 72px);
-      box-shadow: 0 28px 70px rgba(0,0,0,.09), 0 4px 12px rgba(0,0,0,.04);
-      border: 1px solid rgba(0,0,0,.06);
-      width: 95vw;
-      max-width: 2400px;
-      min-height: 52vh;
+      padding: clamp(54px, 4.2vw, 84px) clamp(20px, 3vw, 56px) clamp(36px, 3vw, 60px);
       position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: clamp(14px, 2.2vw, 44px);
+      gap: clamp(10px, 1.4vw, 28px);
     }
 
     /* ── Top bar ─────────────────────────────────────────────────────────── */
@@ -401,10 +394,11 @@
     /* ── OrderCounter ──────────────────────────────────────────────────────── */
     class OrderCounter {
       constructor() {
-        this.currentCount = 0;
-        this.pollTimer    = null;
-        this.retryCount   = 0;
-        this.maxRetries   = 3;
+        this.currentCount   = 0;
+        this.firstFetchDone = false;   // prevents sound on initial/reload fetch
+        this.pollTimer      = null;
+        this.retryCount     = 0;
+        this.maxRetries     = 3;
         this._buildCounter(MIN_DIGITS);
         this.updateCounter();
         this.startPolling();
@@ -448,7 +442,8 @@
           if (!data.success) throw new Error(data.error || 'Request failed');
 
           this._animateUpdate(data.count);
-          this.currentCount = data.count;
+          this.currentCount   = data.count;
+          this.firstFetchDone = true;
           this.setStatus('online', 'Live');
           document.getElementById('tooltip').textContent =
             `Last updated: ${new Date(data.timestamp).toLocaleString()}`;
@@ -487,7 +482,7 @@
           }
         });
 
-        if (changed && prev > 0) this._playSound();
+        if (changed && this.firstFetchDone) this._playSound();
       }
 
       setStatus(type, text) {
