@@ -494,6 +494,7 @@
         });
 
         if (changed && this.firstFetchDone && newCount > this.loadCount) this._playSound();
+        this.loadCount = newCount;
         localStorage.setItem('oc_count', String(newCount));
       }
 
