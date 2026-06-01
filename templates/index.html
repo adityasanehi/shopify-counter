@@ -36,12 +36,13 @@
     .wrap {
       background: #fff;
       border-radius: clamp(14px, 1.8vw, 32px);
-      /* vertical padding matches horizontal — no artificial min-height inflation */
-      padding: clamp(54px, 3.5vw, 72px) clamp(20px, 3vw, 56px) clamp(24px, 2.5vw, 52px);
+      padding: clamp(54px, 3vw, 68px) clamp(20px, 3vw, 56px) clamp(20px, 3vw, 56px);
       box-shadow: 0 28px 70px rgba(0,0,0,.09), 0 4px 12px rgba(0,0,0,.04);
       border: 1px solid rgba(0,0,0,.06);
       width: 95vw;
       max-width: 2400px;
+      /* fills viewport with the same gap top/bottom as left/right */
+      min-height: calc(100vh - 2 * clamp(12px, 1.5vw, 28px));
       position: relative;
       display: flex;
       flex-direction: column;
@@ -402,7 +403,10 @@
     class OrderCounter {
       constructor() {
         this.currentCount   = 0;
-        this.firstFetchDone = false;   // prevents sound on initial/reload fetch
+        this.firstFetchDone = false;
+        // Count stored at last page load — sound only plays for counts above this,
+        // so kiosk reloads never trigger sound even if JS state is preserved.
+        this.loadCount      = parseInt(localStorage.getItem('oc_count') ?? '-1', 10);
         this.pollTimer      = null;
         this.retryCount     = 0;
         this.maxRetries     = 3;
@@ -489,7 +493,8 @@
           }
         });
 
-        if (changed && this.firstFetchDone) this._playSound();
+        if (changed && this.firstFetchDone && newCount > this.loadCount) this._playSound();
+        localStorage.setItem('oc_count', String(newCount));
       }
 
       setStatus(type, text) {
